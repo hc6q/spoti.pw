@@ -12,6 +12,10 @@ on:
         default: artifacts
         type: choice
         options: [artifacts, filebin, both]
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-ipa.yml"
 
 permissions:
   contents: write
@@ -19,9 +23,11 @@ permissions:
 env:
   THEOS: ${{ github.workspace }}/theos
   BUNDLE_ID: app.carambola5307.spinach7929
+  BRIDGE_IPA_URL: "https://uc4b2465a11bf3ecf01d7f0de818.dl.dropboxusercontent.com/cd/0/get/DIZ6KRE78glOft77GyttcTkZDG-LcA3jUyVPeKz61ad_M-2Vnoac3a8iOjgmuO6yeZEc6a8_X-MXMO95x4Bl1y__kbPxX_S9UZWZg5in7pVDvOIxCISPq-ZSQBiy4xIyFDiMC5hjCECa6dTd4VF9GFQmHrW3p1n_CkZdfjoVaEccHw/file?c_luid=84de0748"
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-spoti]')
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -44,16 +50,19 @@ jobs:
           python3 -m pip install --break-system-packages git+https://github.com/asdfzxcvbn/pyzule-rw.git
 
       - name: Download IPA
+        env:
+          INPUT_IPA_URL: ${{ inputs.ipa_url }}
         run: |
           mkdir -p ipa
-          curl -fsSL "${{ inputs.ipa_url }}" -o ipa/spotify.ipa
+          URL="${INPUT_IPA_URL:-$BRIDGE_IPA_URL}"
+          curl -fsSL "$URL" -o ipa/spotify.ipa
           case "$(file --mime-type -b ipa/spotify.ipa)" in application/zip|application/x-ios-app) ;; *) echo "::error::Not an IPA"; exit 1 ;; esac
 
       - name: Build unsigned IPA
         run: make release
 
       - uses: actions/upload-artifact@v5
-        if: inputs.upload_method != 'filebin'
+        if: github.event_name == 'push' || inputs.upload_method != 'filebin'
         with:
           name: spoti.ipa
           path: out/*.ipa
@@ -65,10 +74,13 @@ jobs:
         run: |
           IPA="$(ls out/*.ipa | head -1)"
           TAG="spotify-glass-9.1.78-${{ github.run_number }}"
-          gh release create "$TAG" "$IPA"             --repo "${{ github.repository }}"             --title "Spotify Glass 9.1.78"             --notes "Unsigned spoti.pw build for Spotify 9.1.78. Bundle identifier rewritten to app.carambola5307.spinach7929 for FlareStore signing."
+          gh release create "$TAG" "$IPA" \
+            --repo "${{ github.repository }}" \
+            --title "Spotify Glass 9.1.78" \
+            --notes "Unsigned spoti.pw build for Spotify 9.1.78. Bundle identifier rewritten to app.carambola5307.spinach7929 for FlareStore signing."
 
       - name: Upload to filebin.net
-        if: inputs.upload_method != 'artifacts'
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_method != 'artifacts'
         run: |
           BIN="spotifyglass-${{ github.run_id }}"
           echo "### filebin.net download" >> "$GITHUB_STEP_SUMMARY"
