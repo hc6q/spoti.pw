@@ -15,6 +15,7 @@ on:
 
 env:
   THEOS: ${{ github.workspace }}/theos
+  BUNDLE_ID: app.carambola5307.spinach7929
 
 jobs:
   build:
