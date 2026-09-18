@@ -13,6 +13,9 @@ on:
         type: choice
         options: [artifacts, filebin, both]
 
+permissions:
+  contents: write
+
 env:
   THEOS: ${{ github.workspace }}/theos
   BUNDLE_ID: app.carambola5307.spinach7929
@@ -46,7 +49,8 @@ jobs:
           curl -fsSL "${{ inputs.ipa_url }}" -o ipa/spotify.ipa
           case "$(file --mime-type -b ipa/spotify.ipa)" in application/zip|application/x-ios-app) ;; *) echo "::error::Not an IPA"; exit 1 ;; esac
 
-      - run: make release
+      - name: Build unsigned IPA
+        run: make release
 
       - uses: actions/upload-artifact@v5
         if: inputs.upload_method != 'filebin'
@@ -54,6 +58,14 @@ jobs:
           name: spoti.ipa
           path: out/*.ipa
           if-no-files-found: error
+
+      - name: Publish permanent GitHub release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IPA="$(ls out/*.ipa | head -1)"
+          TAG="spotify-glass-9.1.78-${{ github.run_number }}"
+          gh release create "$TAG" "$IPA"             --repo "${{ github.repository }}"             --title "Spotify Glass 9.1.78"             --notes "Unsigned spoti.pw build for Spotify 9.1.78. Bundle identifier rewritten to app.carambola5307.spinach7929 for FlareStore signing."
 
       - name: Upload to filebin.net
         if: inputs.upload_method != 'artifacts'
